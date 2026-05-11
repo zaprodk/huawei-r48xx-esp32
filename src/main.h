@@ -6,6 +6,11 @@
 #define POWER_EN_GPIO 15
 #define MAX_SRV_CLIENTS 4
 
+#define EEPROM_VOLTAGE_ADDR 0
+#define EEPROM_CURRENT_ADDR 4
+#define EEPROM_MAGIC_ADDR 8
+#define EEPROM_MAGIC_VALUE 0xA5A5A5A5
+
 namespace Main {
 
 enum {

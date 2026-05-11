@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <EEPROM.h>
 #include <WiFi.h>
 #include <ArduinoOTA.h>
 #include <CAN.h>
@@ -52,14 +53,14 @@ void init()
     pinMode(POWER_EN_GPIO, OUTPUT_OPEN_DRAIN);
     digitalWrite(POWER_EN_GPIO, 0); // Default = ON
 
-    WiFi.setHostname("ESP32-R4830G2");
+    WiFi.setHostname("Huawei-R4830G2");
     if(!WiFi.begin(g_WIFI_SSID, g_WIFI_Passphrase))
         Serial.println("WiFi config error!");
     else {
         WiFi.setAutoConnect(true);
     }
 
-    SerialBT.begin("ESP32-R4830G2");
+    SerialBT.begin("Huawei-R4830G2");
 
     ArduinoOTA.onStart([]() {
         String type;
@@ -98,6 +99,8 @@ void init()
 
     // crashes when calling some functions inside interrupt
     //CAN.onReceive(onCANReceive);
+
+    EEPROM.begin(512);
 }
 
 Stream* channel(int num)

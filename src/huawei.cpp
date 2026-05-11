@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <EEPROM.h>
 #include <CAN.h>
 
 #include "utils.h"
@@ -6,6 +7,9 @@
 #include "huawei.h"
 
 namespace Huawei {
+
+// Calibration factor for output voltage reading (adjust this if voltage reading is off)
+const float OUTPUT_VOLTAGE_CALIBRATION = 1.0f;  // 1.0 = no calibration, adjust as needed
 
 bool g_Ready = false;
 uint16_t g_UserVoltage = 0x00;
@@ -21,8 +25,10 @@ void onRecvCAN(uint32_t msgid, uint8_t *data, uint8_t length)
     switch(eaddr.cmdId)
     {
         case HUAWEI_R48XX_MSG_CURRENT_ID: {
-            if(!data[3])
+            if(!data[3]) {
                 g_Ready = true;
+                Serial.println("PSU ready");
+            }
             g_Current = __builtin_bswap16(*(uint16_t *)&data[6]) / 30.0;
             if(!eaddr.fromSrc)
                 g_CoulombCounter += g_Current * 0.377; // every 377ms
@@ -51,7 +57,7 @@ void onRecvCAN(uint32_t msgid, uint8_t *data, uint8_t length)
                     g_PSU.efficiency = val / 1024.0;
                 } return;
                 case 0x0175: {
-                    g_PSU.output_voltage = val / 1024.0;
+                    g_PSU.output_voltage = (val / 1024.0) * OUTPUT_VOLTAGE_CALIBRATION;
                 } return;
                 case 0x0176: {
                     g_PSU.output_current_max = val / 30.0;
@@ -113,9 +119,45 @@ void onRecvCAN(uint32_t msgid, uint8_t *data, uint8_t length)
 
 void every1000ms()
 {
+    Serial.printf("every1000ms, g_Ready=%d\n", g_Ready);
     if(g_Ready)
         sendGetData();
-/*
+
+    static bool eepromLoaded = false;
+    if(!eepromLoaded && g_Ready) {
+        Serial.println("Loading EEPROM");
+        uint32_t magic = 0;
+        EEPROM.get(EEPROM_MAGIC_ADDR, magic);
+        if(magic == EEPROM_MAGIC_VALUE) {
+            float savedVoltage;
+            EEPROM.get(EEPROM_VOLTAGE_ADDR, savedVoltage);
+            if(!isnan(savedVoltage)) {
+                Serial.printf("Saved voltage: %.2f\n", savedVoltage);
+                if(savedVoltage >= 40.0f && savedVoltage <= 60.0f) {
+                    Serial.printf("Setting voltage to %.2f\n", savedVoltage);
+                    setVoltage(savedVoltage, false);
+                }
+            } else {
+                Serial.println("Saved voltage invalid (NaN)");
+            }
+
+            float savedCurrent;
+            EEPROM.get(EEPROM_CURRENT_ADDR, savedCurrent);
+            if(!isnan(savedCurrent)) {
+                Serial.printf("Saved current: %.2f\n", savedCurrent);
+                if(savedCurrent >= 0.0f && savedCurrent <= 250.0f) {
+                    Serial.printf("Setting current to %.2f\n", savedCurrent);
+                    setCurrent(savedCurrent, false);
+                }
+            } else {
+                Serial.println("Saved current invalid (NaN)");
+            }
+        } else {
+            Serial.println("No valid EEPROM settings found");
+        }
+        eepromLoaded = true;
+    }
+
     static uint8_t count10 = 0;
     if(count10 == 10)
     {
@@ -125,19 +167,27 @@ void every1000ms()
             setCurrentHex(g_UserCurrent, false);
     }
     count10++;
-*/
 }
 
 void sendCAN(uint32_t msgid, uint8_t *data, uint8_t length, bool rtr)
 {
+    Serial.printf("sendCAN msgid=0x%08X len=%u rtr=%u\n", msgid, length, rtr);
     CAN.beginExtendedPacket(msgid, -1, rtr);
     CAN.write(data, length);
     CAN.endPacket();
+    Serial.println("CAN packet queued");
 }
 
 void setReg(uint8_t reg, uint16_t val)
 {
-    HuaweiEAddr eaddr = {HUAWEI_R48XX_PROTOCOL_ID, 0x00, HUAWEI_R48XX_MSG_CONTROL_ID, 0x01, 0x3F, 0x00};
+    Serial.printf("setReg: reg=0x%02X, val=0x%04X\n", reg, val);
+    HuaweiEAddr eaddr;
+    eaddr.protoId = HUAWEI_R48XX_PROTOCOL_ID;
+    eaddr.addr = 0x00;
+    eaddr.cmdId = HUAWEI_R48XX_MSG_CONTROL_ID;
+    eaddr.fromSrc = 0x01;
+    eaddr.rev = 0x3F;
+    eaddr.count = 0x00;
     uint8_t data[8];
     data[0] = 0x01;
     data[1] = reg;
@@ -147,7 +197,8 @@ void setReg(uint8_t reg, uint16_t val)
     data[5] = 0x00;
     data[6] = (val >> 8) & 0xFF;
     data[7] = val & 0xFF;
-
+    Serial.printf("Sending data: %02X %02X %02X %02X %02X %02X %02X %02X (msgid=0x%08X)\n",
+        data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7], eaddr.pack());
     sendCAN(eaddr.pack(), data, sizeof(data));
 }
 
@@ -175,8 +226,16 @@ void setVoltageHex(uint16_t hex, bool perm)
 
 void setVoltage(float u, bool perm)
 {
+    Serial.printf("setVoltage called with u=%.2f, perm=%d\n", u, perm);
+    if(perm) {
+        EEPROM.put(EEPROM_VOLTAGE_ADDR, u);
+        EEPROM.put(EEPROM_MAGIC_ADDR, (uint32_t)EEPROM_MAGIC_VALUE);
+        EEPROM.commit();
+        Serial.println("Saved voltage to EEPROM");
+    }
+
     // calibration, non-linearity measured on my own PSU
-    u += (u - 49.0) / 110.0;
+    u += 0.2;
 
     if(u < 40.0)
         u = 40.0;
@@ -184,6 +243,7 @@ void setVoltage(float u, bool perm)
         u = 60.0;
 
     uint16_t hex = u * 1020.0;
+    Serial.printf("Calculated hex: %d\n", hex);
     setVoltageHex(hex, perm);
 }
 
@@ -202,6 +262,13 @@ void setCurrentHex(uint16_t hex, bool perm)
 
 void setCurrent(float i, bool perm)
 {
+    if(perm) {
+        EEPROM.put(EEPROM_CURRENT_ADDR, i);
+        EEPROM.put(EEPROM_MAGIC_ADDR, (uint32_t)EEPROM_MAGIC_VALUE);
+        EEPROM.commit();
+        Serial.println("Saved current to EEPROM");
+    }
+
     uint16_t hex = i * 30.0;
 
     setCurrentHex(hex, perm);
@@ -209,21 +276,39 @@ void setCurrent(float i, bool perm)
 
 void sendGetData()
 {
-    HuaweiEAddr eaddr = {HUAWEI_R48XX_PROTOCOL_ID, 0x00, HUAWEI_R48XX_MSG_DATA_ID, 0x01, 0x3F, 0x00};
+    HuaweiEAddr eaddr;
+    eaddr.protoId = HUAWEI_R48XX_PROTOCOL_ID;
+    eaddr.addr = 0x00;
+    eaddr.cmdId = HUAWEI_R48XX_MSG_DATA_ID;
+    eaddr.fromSrc = 0x01;
+    eaddr.rev = 0x3F;
+    eaddr.count = 0x00;
     uint8_t data[8] = {0x00};
     sendCAN(eaddr.pack(), data, sizeof(data));
 }
 
 void sendGetInfo()
 {
-    HuaweiEAddr eaddr = {HUAWEI_R48XX_PROTOCOL_ID, 0x00, HUAWEI_R48XX_MSG_INFO_ID, 0x01, 0x3F, 0x00};
+    HuaweiEAddr eaddr;
+    eaddr.protoId = HUAWEI_R48XX_PROTOCOL_ID;
+    eaddr.addr = 0x00;
+    eaddr.cmdId = HUAWEI_R48XX_MSG_INFO_ID;
+    eaddr.fromSrc = 0x01;
+    eaddr.rev = 0x3F;
+    eaddr.count = 0x00;
     uint8_t data[8] = {0x00};
     sendCAN(eaddr.pack(), data, sizeof(data));
 }
 
 void sendGetDescription()
 {
-    HuaweiEAddr eaddr = {HUAWEI_R48XX_PROTOCOL_ID, 0x00, HUAWEI_R48XX_MSG_DESC_ID, 0x01, 0x3F, 0x00};
+    HuaweiEAddr eaddr;
+    eaddr.protoId = HUAWEI_R48XX_PROTOCOL_ID;
+    eaddr.addr = 0x00;
+    eaddr.cmdId = HUAWEI_R48XX_MSG_DESC_ID;
+    eaddr.fromSrc = 0x01;
+    eaddr.rev = 0x3F;
+    eaddr.count = 0x00;
     uint8_t data[8] = {0x00};
     sendCAN(eaddr.pack(), data, sizeof(data));
 }
