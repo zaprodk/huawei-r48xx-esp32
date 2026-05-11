@@ -29,7 +29,7 @@ void onRecvCAN(uint32_t msgid, uint8_t *data, uint8_t length)
                 g_Ready = true;
                 Serial.println("PSU ready");
             }
-            g_Current = __builtin_bswap16(*(uint16_t *)&data[6]) / 30.0;
+            g_Current = __builtin_bswap16(*(uint16_t *)&data[6]) / 20.0;
             if(!eaddr.fromSrc)
                 g_CoulombCounter += g_Current * 0.377; // every 377ms
         } return;
@@ -60,7 +60,7 @@ void onRecvCAN(uint32_t msgid, uint8_t *data, uint8_t length)
                     g_PSU.output_voltage = (val / 1024.0) * OUTPUT_VOLTAGE_CALIBRATION;
                 } return;
                 case 0x0176: {
-                    g_PSU.output_current_max = val / 30.0;
+                    g_PSU.output_current_max = val / 20.0;
                 } return;
                 case 0x0178: {
                     g_PSU.input_voltage = val / 1024.0;
@@ -269,7 +269,7 @@ void setCurrent(float i, bool perm)
         Serial.println("Saved current to EEPROM");
     }
 
-    uint16_t hex = i * 30.0;
+    uint16_t hex = i * 20.0;
 
     setCurrentHex(hex, perm);
 }

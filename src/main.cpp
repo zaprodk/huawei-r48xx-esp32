@@ -75,7 +75,7 @@ void init()
     pinMode(POWER_EN_GPIO, OUTPUT_OPEN_DRAIN);
     digitalWrite(POWER_EN_GPIO, 0); // Default = ON
 
-    WiFi.setHostname("Huawei-R4830G2");
+    WiFi.setHostname("Huawei-R4850G2");
     if(!WiFi.begin(g_WIFI_SSID, g_WIFI_Passphrase))
         Serial.println("WiFi config error!");
     else {
@@ -86,7 +86,7 @@ void init()
     // Register the callback to handle connect/disconnect events
     SerialBT.register_callback(bt_connection_callback);
     // Start BT normally ("Just Works" mode)
-    SerialBT.begin("Huawei-R4830G2"); 
+    SerialBT.begin("Huawei-R4850G2"); 
 
     ArduinoOTA.onStart([]() {
         String type;
