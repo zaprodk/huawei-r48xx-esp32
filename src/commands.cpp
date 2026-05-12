@@ -123,25 +123,26 @@ int CMD_status(int argc, char **argv)
         "Input Current: %.2f A\r\n"
         "%s\r\n"
         "Input Power: %.2f W\r\n"
+        "Output Power: %.2f W\r\n"
         "Input Temperature: %.2f °C\r\n"
+        "Output Temperature: %.2f °C\r\n"
         "PSU Efficiency: %.2f %%\r\n"
         "Output Voltage: %.2f V\r\n"
         "Output Current: %.2f A / %.2f A\r\n"
-        "Output Power: %.2f W\r\n"
-        "Output Temperature: %.2f °C\r\n"
-        "Coulomb Counter: %.2f Ah\r\n"
+        "Coulomb counter: %.2f Ah (%.2f kWh)\r\n"
         "--- STATUS ----\r\n",
         info.input_voltage, info.input_freq,
         info.input_current,
         acLimitStr,
         info.input_power,
+        info.output_power,
         info.input_temp,
+        info.output_temp,
         info.efficiency * 100.0,
         info.output_voltage,
         info.output_current, info.output_current_max,
-        info.output_power,
-        info.output_temp,
-        Huawei::g_CoulombCounter / 3600.0
+        Huawei::g_CoulombCounter / 3600.0,
+        Huawei::g_EnergyCounter / 3600000.0
     );
 
     // 4. Send the entire block at once and wait for it to clear

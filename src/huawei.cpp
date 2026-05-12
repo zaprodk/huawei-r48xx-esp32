@@ -31,6 +31,7 @@ float g_UserACLimit = 0.0;           // <--- Added for AC tracking
 bool g_UserACLimitEnabled = false;   // <--- Added for AC tracking
 float g_Current = 0.0;
 float g_CoulombCounter = 0.0;
+float g_EnergyCounter = 0.0;
 HuaweiInfo g_PSU;
 
 void onRecvCAN(uint32_t msgid, uint8_t *data, uint8_t length)
@@ -47,6 +48,7 @@ void onRecvCAN(uint32_t msgid, uint8_t *data, uint8_t length)
             g_Current = __builtin_bswap16(*(uint16_t *)&data[6]) / 20.0;
             if(!eaddr.fromSrc)
                 g_CoulombCounter += g_Current * 0.377; // every 377ms
+                g_EnergyCounter += (g_Current * g_PSU.output_voltage) * 0.377;
         } return;
 
         case HUAWEI_R48XX_MSG_DATA_ID: {
