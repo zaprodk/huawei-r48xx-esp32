@@ -21,8 +21,8 @@
 
 namespace Huawei {
 
-// Calibration factor for output voltage reading (adjust this if voltage reading is off)
-const float OUTPUT_VOLTAGE_CALIBRATION = 1.0f;  // 1.0 = no calibration, adjust as needed
+// Calibration offset: The physical output is roughly 0.13V lower than the digital reading
+const float OUTPUT_VOLTAGE_OFFSET = -0.13f;
 
 bool g_Ready = false;
 uint16_t g_UserVoltage = 0x00;
@@ -75,7 +75,7 @@ void onRecvCAN(uint32_t msgid, uint8_t *data, uint8_t length)
                     g_PSU.efficiency = val / 1024.0;
                 } return;
                 case 0x0175: {
-                    g_PSU.output_voltage = (val / 1024.0) * OUTPUT_VOLTAGE_CALIBRATION;
+                    g_PSU.output_voltage = (val / 1024.0) + OUTPUT_VOLTAGE_OFFSET;
                 } return;
                 case 0x0176: {
                     g_PSU.output_current_max = val / 20.0;
@@ -265,15 +265,15 @@ void setVoltage(float u, bool perm)
         DEBUG_PRINTLN("Saved voltage to EEPROM");
     }
 
-    // calibration, non-linearity measured on my own PSU
-    u += 0.2;
+    // Restrict inputs to safe hardware bounds
+    if(u < 40.0) u = 40.0;
+    if(u > 60.0) u = 60.0;
 
-    if(u < 40.0)
-        u = 40.0;
-    if(u > 60.0)
-        u = 60.0;
-
-    uint16_t hex = u * 1020.0;
+    // To get the actual physical output to match 'u', we must tell the 
+    // internal DAC to aim slightly higher to overcome the hardware voltage drop.
+    // Subtracting a negative offset (e.g. 55.0 - (-0.13)) adds it to the target.
+    uint16_t hex = (u - OUTPUT_VOLTAGE_OFFSET) * 1024.0;
+    
     DEBUG_PRINTF("Calculated hex: %d\n", hex);
     setVoltageHex(hex, perm);
 }
