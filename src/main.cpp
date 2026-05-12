@@ -1,7 +1,5 @@
 #include <Arduino.h>
 #include <EEPROM.h>
-#include <WiFi.h>
-#include <ArduinoOTA.h>
 #include <CAN.h>
 #include <BluetoothSerial.h>
 
@@ -10,13 +8,39 @@
 #include "main.h"
 #include "secrets.h"
 
-WiFiServer server(23);
-WiFiClient serverClient;
+// --- FEATURE FLAGS ---
+// Uncomment the next line to ENABLE Wi-Fi and OTA updates.
+// #define ENABLE_WIFI
+
+// Uncomment the next line to ENABLE Serial Debug output via USB.
+// Leave commented out for production to save CPU cycles and RAM.
+// #define ENABLE_DEBUG
+
+// --- DEBUG MACROS ---
+#ifdef ENABLE_DEBUG
+  #define DEBUG_PRINT(x) Serial.print(x)
+  #define DEBUG_PRINTLN(x) Serial.println(x)
+  #define DEBUG_PRINTF(...) Serial.printf(__VA_ARGS__)
+#else
+  #define DEBUG_PRINT(x)
+  #define DEBUG_PRINTLN(x)
+  #define DEBUG_PRINTF(...)
+#endif
+
+#ifdef ENABLE_WIFI
+  #include <WiFi.h>
+  #include <ArduinoOTA.h>
+  
+  WiFiServer server(23);
+  WiFiClient serverClient;
+  
+  const char g_WIFI_SSID[] = SECRET_WIFI_SSID;
+  const char g_WIFI_Passphrase[] = SECRET_WIFI_PASS;
+#else
+  #include <WiFi.h> // Still needed to send the WIFI_OFF command
+#endif
 
 BluetoothSerial SerialBT;
-
-const char g_WIFI_SSID[] = SECRET_WIFI_SSID;
-const char g_WIFI_Passphrase[] = SECRET_WIFI_PASS;
 
 namespace Main
 {
@@ -28,21 +52,18 @@ int g_SerialBufferPos[NUM_CHANNELS];
 unsigned long g_Time1000;
 
 // --- APPLICATION SECURITY FLAG ---
-// This tracks if the current Bluetooth connection has entered the PIN
 bool g_BT_Authenticated = false;
 
 } // Temporarily closing namespace to define the BT callback
 
 // --- BLUETOOTH CONNECTION CALLBACK ---
-// This resets the security lock whenever a device connects or disconnects.
-// It ensures that if you disconnect, the next person is locked out.
 void bt_connection_callback(esp_spp_cb_event_t event, esp_spp_cb_param_t *param) {
     if (event == ESP_SPP_SRV_OPEN_EVT) {
-        Serial.println("Bluetooth Client Connected. System Locked.");
+        DEBUG_PRINTLN("Bluetooth Client Connected. System Locked.");
         Main::g_BT_Authenticated = false; // Lock the system on new connection
         SerialBT.println("SYSTEM LOCKED. Enter 4-digit PIN:");
     } else if (event == ESP_SPP_CLOSE_EVT) {
-        Serial.println("Bluetooth Client Disconnected.");
+        DEBUG_PRINTLN("Bluetooth Client Disconnected.");
         Main::g_BT_Authenticated = false; // Lock the system on disconnect
     }
 }
@@ -67,26 +88,22 @@ void onCANReceive(int packetSize)
 
 void init()
 {
-    Serial.begin(115200);
+    Serial.begin(115200); // We keep this active so you can still send commands over USB
     while(!Serial);
-    Serial.println("BOOTED!");
+    DEBUG_PRINTLN("BOOTED!");
 
     // PSU enable pin
     pinMode(POWER_EN_GPIO, OUTPUT_OPEN_DRAIN);
     digitalWrite(POWER_EN_GPIO, 0); // Default = ON
 
+#ifdef ENABLE_WIFI
+    // --- WI-FI & OTA SETUP ---
     WiFi.setHostname("Huawei-R4850G2");
     if(!WiFi.begin(g_WIFI_SSID, g_WIFI_Passphrase))
-        Serial.println("WiFi config error!");
+        DEBUG_PRINTLN("WiFi config error!");
     else {
         WiFi.setAutoConnect(true);
     }
-
-    // --- CLEAN BLUETOOTH START ---
-    // Register the callback to handle connect/disconnect events
-    SerialBT.register_callback(bt_connection_callback);
-    // Start BT normally ("Just Works" mode)
-    SerialBT.begin("Huawei-R4850G2"); 
 
     ArduinoOTA.onStart([]() {
         String type;
@@ -94,25 +111,33 @@ void init()
             type = "sketch";
         else // U_SPIFFS
             type = "filesystem";
-        Serial.println("Start updating " + type);
+        DEBUG_PRINTLN("Start updating " + type);
     })
     .onEnd([]() {
-        Serial.println("\nEnd");
+        DEBUG_PRINTLN("\nEnd");
     })
     .onProgress([](unsigned int progress, unsigned int total) {
-        Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+        DEBUG_PRINTF("Progress: %u%%\r", (progress / (total / 100)));
     })
     .onError([](ota_error_t error) {
-        Serial.printf("Error[%u]: ", error);
+        DEBUG_PRINTF("Error[%u]: ", error);
     });
 
     ArduinoOTA.begin();
 
     server.begin();
     server.setNoDelay(true);
+#else
+    // Explicitly turn OFF the Wi-Fi radio
+    WiFi.mode(WIFI_OFF); 
+#endif
+
+    // --- CLEAN BLUETOOTH START ---
+    SerialBT.register_callback(bt_connection_callback);
+    SerialBT.begin("Huawei-R4850G2"); 
 
     if(!CAN.begin(125E3)) {
-        Serial.println("Starting CAN failed!");
+        DEBUG_PRINTLN("Starting CAN failed!");
         while(1);
     }
 
@@ -126,8 +151,11 @@ Stream* channel(int num)
 
     if(num == BTSERIAL && SerialBT.hasClient())
         return &SerialBT;
+        
+#ifdef ENABLE_WIFI
     else if(num == TCPSERIAL && serverClient)
         return &serverClient;
+#endif
 
     return &Serial;
 }
@@ -138,6 +166,7 @@ void loop()
     if(packetSize)
         onCANReceive(packetSize);
 
+#ifdef ENABLE_WIFI
     ArduinoOTA.handle();
 
     if(server.hasClient())
@@ -148,6 +177,7 @@ void loop()
     }
     if(!serverClient)
         serverClient.stop();
+#endif
 
     for(int i = 0; i < NUM_CHANNELS; i++)
     {
@@ -156,35 +186,31 @@ void loop()
             g_CurrentChannel = i;
             int c = channel(i)->read();
             
-            // Check for end of line OR buffer full
             if(c == '\r' || c == '\n' || g_SerialBufferPos[i] >= (sizeof(*g_SerialBuffer) - 1))
             {
-                g_SerialBuffer[i][g_SerialBufferPos[i]] = 0; // Null terminate the string
+                g_SerialBuffer[i][g_SerialBufferPos[i]] = 0; 
 
                 if(g_SerialBufferPos[i] > 0)
                 {
                     // --- APPLICATION LAYER SECURITY LOGIC ---
                     if (i == BTSERIAL && !g_BT_Authenticated) 
                     {
-                        // Client is on Bluetooth and NOT authenticated yet
                         if (strcmp(g_SerialBuffer[i], SECRET_BT_PIN) == 0)
                         {
                             g_BT_Authenticated = true;
                             SerialBT.println("Access Granted. System Ready.");
-                            Serial.println("Bluetooth client authenticated successfully.");
+                            DEBUG_PRINTLN("Bluetooth client authenticated successfully.");
                         } 
                         else 
                         {
                             SerialBT.println("ERROR: Unauthorized. Enter 4-digit PIN:");
-                            Serial.println("Bluetooth client failed authentication.");
+                            DEBUG_PRINTLN("Bluetooth client failed authentication.");
                         }
                     } 
                     else 
                     {
-                        // If it's a local Serial command, TCP, OR an authenticated Bluetooth command, parse it
                         Commands::parseLine(g_SerialBuffer[i]);
                     }
-                    // --- END SECURITY LOGIC ---
                 }
 
                 g_SerialBufferPos[i] = 0;

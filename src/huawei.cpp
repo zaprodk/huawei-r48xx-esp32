@@ -6,6 +6,19 @@
 #include "main.h"
 #include "huawei.h"
 
+// Uncomment to enable debug in this file
+// #define ENABLE_DEBUG
+
+#ifdef ENABLE_DEBUG
+  #define DEBUG_PRINT(x) Serial.print(x)
+  #define DEBUG_PRINTLN(x) Serial.println(x)
+  #define DEBUG_PRINTF(...) Serial.printf(__VA_ARGS__)
+#else
+  #define DEBUG_PRINT(x)
+  #define DEBUG_PRINTLN(x)
+  #define DEBUG_PRINTF(...)
+#endif
+
 namespace Huawei {
 
 // Calibration factor for output voltage reading (adjust this if voltage reading is off)
@@ -27,7 +40,7 @@ void onRecvCAN(uint32_t msgid, uint8_t *data, uint8_t length)
         case HUAWEI_R48XX_MSG_CURRENT_ID: {
             if(!data[3]) {
                 g_Ready = true;
-                Serial.println("PSU ready");
+                DEBUG_PRINTLN("PSU ready");
             }
             g_Current = __builtin_bswap16(*(uint16_t *)&data[6]) / 20.0;
             if(!eaddr.fromSrc)
@@ -119,41 +132,41 @@ void onRecvCAN(uint32_t msgid, uint8_t *data, uint8_t length)
 
 void every1000ms()
 {
-    Serial.printf("every1000ms, g_Ready=%d\n", g_Ready);
+    DEBUG_PRINTF("every1000ms, g_Ready=%d\n", g_Ready);
     if(g_Ready)
         sendGetData();
 
     static bool eepromLoaded = false;
     if(!eepromLoaded && g_Ready) {
-        Serial.println("Loading EEPROM");
+        ("Loading EEPROM");
         uint32_t magic = 0;
         EEPROM.get(EEPROM_MAGIC_ADDR, magic);
         if(magic == EEPROM_MAGIC_VALUE) {
             float savedVoltage;
             EEPROM.get(EEPROM_VOLTAGE_ADDR, savedVoltage);
             if(!isnan(savedVoltage)) {
-                Serial.printf("Saved voltage: %.2f\n", savedVoltage);
+                ("Saved voltage: %.2f\n", savedVoltage);
                 if(savedVoltage >= 40.0f && savedVoltage <= 60.0f) {
-                    Serial.printf("Setting voltage to %.2f\n", savedVoltage);
+                    ("Setting voltage to %.2f\n", savedVoltage);
                     setVoltage(savedVoltage, false);
                 }
             } else {
-                Serial.println("Saved voltage invalid (NaN)");
+                DEBUG_PRINTLN("Saved voltage invalid (NaN)");
             }
 
             float savedCurrent;
             EEPROM.get(EEPROM_CURRENT_ADDR, savedCurrent);
             if(!isnan(savedCurrent)) {
-                Serial.printf("Saved current: %.2f\n", savedCurrent);
+                DEBUG_PRINTF("Saved current: %.2f\n", savedCurrent);
                 if(savedCurrent >= 0.0f && savedCurrent <= 250.0f) {
-                    Serial.printf("Setting current to %.2f\n", savedCurrent);
+                    DEBUG_PRINTF("Setting current to %.2f\n", savedCurrent);
                     setCurrent(savedCurrent, false);
                 }
             } else {
-                Serial.println("Saved current invalid (NaN)");
+                DEBUG_PRINTLN("Saved current invalid (NaN)");
             }
         } else {
-            Serial.println("No valid EEPROM settings found");
+            DEBUG_PRINTLN("No valid EEPROM settings found");
         }
         eepromLoaded = true;
     }
@@ -171,16 +184,16 @@ void every1000ms()
 
 void sendCAN(uint32_t msgid, uint8_t *data, uint8_t length, bool rtr)
 {
-    Serial.printf("sendCAN msgid=0x%08X len=%u rtr=%u\n", msgid, length, rtr);
+    DEBUG_PRINTF("sendCAN msgid=0x%08X len=%u rtr=%u\n", msgid, length, rtr);
     CAN.beginExtendedPacket(msgid, -1, rtr);
     CAN.write(data, length);
     CAN.endPacket();
-    Serial.println("CAN packet queued");
+    DEBUG_PRINTLN("CAN packet queued");
 }
 
 void setReg(uint8_t reg, uint16_t val)
 {
-    Serial.printf("setReg: reg=0x%02X, val=0x%04X\n", reg, val);
+    DEBUG_PRINTF("setReg: reg=0x%02X, val=0x%04X\n", reg, val);
     HuaweiEAddr eaddr;
     eaddr.protoId = HUAWEI_R48XX_PROTOCOL_ID;
     eaddr.addr = 0x00;
@@ -197,7 +210,7 @@ void setReg(uint8_t reg, uint16_t val)
     data[5] = 0x00;
     data[6] = (val >> 8) & 0xFF;
     data[7] = val & 0xFF;
-    Serial.printf("Sending data: %02X %02X %02X %02X %02X %02X %02X %02X (msgid=0x%08X)\n",
+    DEBUG_PRINTF("Sending data: %02X %02X %02X %02X %02X %02X %02X %02X (msgid=0x%08X)\n",
         data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7], eaddr.pack());
     sendCAN(eaddr.pack(), data, sizeof(data));
 }
@@ -226,12 +239,12 @@ void setVoltageHex(uint16_t hex, bool perm)
 
 void setVoltage(float u, bool perm)
 {
-    Serial.printf("setVoltage called with u=%.2f, perm=%d\n", u, perm);
+    DEBUG_PRINTF("setVoltage called with u=%.2f, perm=%d\n", u, perm);
     if(perm) {
         EEPROM.put(EEPROM_VOLTAGE_ADDR, u);
         EEPROM.put(EEPROM_MAGIC_ADDR, (uint32_t)EEPROM_MAGIC_VALUE);
         EEPROM.commit();
-        Serial.println("Saved voltage to EEPROM");
+        DEBUG_PRINTLN("Saved voltage to EEPROM");
     }
 
     // calibration, non-linearity measured on my own PSU
@@ -243,7 +256,7 @@ void setVoltage(float u, bool perm)
         u = 60.0;
 
     uint16_t hex = u * 1020.0;
-    Serial.printf("Calculated hex: %d\n", hex);
+    DEBUG_PRINTF("Calculated hex: %d\n", hex);
     setVoltageHex(hex, perm);
 }
 
@@ -266,7 +279,7 @@ void setCurrent(float i, bool perm)
         EEPROM.put(EEPROM_CURRENT_ADDR, i);
         EEPROM.put(EEPROM_MAGIC_ADDR, (uint32_t)EEPROM_MAGIC_VALUE);
         EEPROM.commit();
-        Serial.println("Saved current to EEPROM");
+        DEBUG_PRINTLN("Saved current to EEPROM");
     }
 
     uint16_t hex = i * 20.0;
