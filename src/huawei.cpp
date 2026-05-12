@@ -46,9 +46,10 @@ void onRecvCAN(uint32_t msgid, uint8_t *data, uint8_t length)
                 DEBUG_PRINTLN("PSU ready");
             }
             g_Current = __builtin_bswap16(*(uint16_t *)&data[6]) / 20.0;
-            if(!eaddr.fromSrc)
+            if(!eaddr.fromSrc) {
                 g_CoulombCounter += g_Current * 0.377; // every 377ms
                 g_EnergyCounter += (g_Current * g_PSU.output_voltage) * 0.377;
+            }
         } return;
 
         case HUAWEI_R48XX_MSG_DATA_ID: {
