@@ -105,23 +105,33 @@ int CMD_status(int argc, char **argv)
     Huawei::HuaweiInfo &info = Huawei::g_PSU;
 
     Main::channel()->println("--- STATUS ----");
+    delay(10); // Give the BT buffer time to breathe
+
     Main::channel()->printf("Input Voltage: %.2f V ~ %.2f Hz\n", info.input_voltage, info.input_freq);
     Main::channel()->printf("Input Current: %.2f A\n", info.input_current);
+    delay(10); // Breathe
     
-    // --- NEW AC LIMIT READOUT ---
+    // --- AC LIMIT READOUT ---
     if(Huawei::g_UserACLimitEnabled) {
         Main::channel()->printf("AC Input Limit: %.2f A (ACTIVE)\n", Huawei::g_UserACLimit);
     } else {
         Main::channel()->println("AC Input Limit: DISABLED");
     }
-    // ----------------------------
+    delay(10); // Breathe
+    // ------------------------
 
     Main::channel()->printf("Input Power: %.2f W\n", info.input_power);
     Main::channel()->printf("Input Temperature: %.2f °C\n", info.input_temp);
+    delay(10); // Breathe
+
     Main::channel()->printf("PSU Efficiency: %.2f %%\n", info.efficiency * 100.0);
     Main::channel()->printf("Output Voltage: %.2f V\n", info.output_voltage);
+    delay(10); // Breathe
+
     Main::channel()->printf("Output Current: %.2f A / %.2f A\n", info.output_current, info.output_current_max);
     Main::channel()->printf("Output Power: %.2f W\n", info.output_power);
+    delay(10); // Breathe
+
     Main::channel()->printf("Output Temperature: %.2f °C\n", info.output_temp);
     Main::channel()->printf("Coulomb Counter: %.2f Ah\n", Huawei::g_CoulombCounter / 3600.0);
     Main::channel()->println("--- STATUS ----");
