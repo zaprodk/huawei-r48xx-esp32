@@ -287,6 +287,42 @@ void setCurrent(float i, bool perm)
     setCurrentHex(hex, perm);
 }
 
+void setInputCurrentLimit(float amps, bool enable)
+{
+    // The R4850G2 has a hardware maximum of ~17A-19A on the AC side.
+    if(amps > 19.0) amps = 19.0;
+    if(amps < 0.0) amps = 0.0;
+
+#ifdef ENABLE_DEBUG
+    DEBUG_PRINTF("Setting AC Input Limit: %.2fA, Enabled: %d\n", amps, enable);
+#else
+    Serial.printf("Setting AC Input Limit: %.2fA, Enabled: %d\n", amps, enable);
+#endif
+
+    HuaweiEAddr eaddr;
+    eaddr.protoId = HUAWEI_R48XX_PROTOCOL_ID;
+    eaddr.addr = 0x00;
+    eaddr.cmdId = HUAWEI_R48XX_MSG_CONTROL_ID;
+    eaddr.fromSrc = 0x01;
+    eaddr.rev = 0x3F;
+    eaddr.count = 0x00;
+
+    // Convert Amps to the 32-bit hex value expected by the protocol
+    uint32_t val = (uint32_t)(amps * 1024.0);
+    
+    uint8_t data[8];
+    data[0] = 0x01;
+    data[1] = 0x09; // Register 0x09: AC Input Current Limit
+    data[2] = 0x00;
+    data[3] = enable ? 0x01 : 0x00; // Byte 3 acts as the ON/OFF switch
+    data[4] = (val >> 24) & 0xFF;
+    data[5] = (val >> 16) & 0xFF;
+    data[6] = (val >> 8) & 0xFF;
+    data[7] = val & 0xFF;
+
+    sendCAN(eaddr.pack(), data, sizeof(data));
+}
+
 void sendGetData()
 {
     HuaweiEAddr eaddr;
