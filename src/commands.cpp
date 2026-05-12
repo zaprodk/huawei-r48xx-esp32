@@ -222,28 +222,24 @@ int CMD_wifi(int argc, char **argv)
 int CMD_aclimit(int argc, char **argv)
 {
     if(argc < 2 || argc > 3) {
-        Main::channel()->println("Usage: aclimit <amps> [enable (1|0)]");
+        Main::channel()->println("Usage: aclimit <amps> [perm]");
         return 1;
     }
 
-    // Parse the requested Amps
     float amps = strtof(argv[1], NULL);
-
-    // If you just type "aclimit 5", default to enabling it.
-    // If you type "aclimit 0", default to disabling it.
+    
+    // Automatically determine enable status: any value > 0 enables it.
     bool enable = (amps > 0.0);
 
-    // If you specifically pass a second argument (e.g., "aclimit 10 0" to turn it off but remember 10)
+    bool perm = false;
     if(argc == 3) {
         if(strtoul(argv[2], NULL, 10))
-            enable = true;
-        else
-            enable = false;
+            perm = true;
     }
 
-    Huawei::setInputCurrentLimit(amps, enable);
+    Huawei::setInputCurrentLimit(amps, enable, perm);
     
-    Main::channel()->printf("AC Limit set to %.2f A (Enabled: %d)\n", amps, enable);
+    Main::channel()->printf("AC Limit set to %.2f A (Enabled: %d, Permanent: %d)\n", amps, enable, perm);
 
     return 0;
 }
@@ -261,7 +257,7 @@ CommandEntry g_Commands[] =
     {"can",         CMD_can,        " : can <msgid> <hex> [rtr]"},
     {"onoff",       CMD_onoff,      " : onoff <0|1>"},
     {"wifi",        CMD_wifi,       " : show wifi config"},
-    {"aclimit",     CMD_aclimit,    " : aclimit <amps> [enable]"},
+    {"aclimit",     CMD_aclimit,    " : aclimit <amps> [perm]"},
     { 0, 0, 0 }
 };
 

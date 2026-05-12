@@ -54,7 +54,7 @@ void setVoltage(float u, bool perm);
 void setCurrentHex(uint16_t hex, bool perm);
 void setCurrent(float i, bool perm);
 
-void setInputCurrentLimit(float amps, bool enable);
+void setInputCurrentLimit(float amps, bool enable, bool perm = false);
 
 void sendGetData();
 void sendGetInfo();

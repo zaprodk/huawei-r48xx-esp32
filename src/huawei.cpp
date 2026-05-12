@@ -99,7 +99,7 @@ void onRecvCAN(uint32_t msgid, uint8_t *data, uint8_t length)
                 case 1: {
                     uint32_t val = __builtin_bswap32(*(uint32_t *)&data[4]);
                     uint16_t rated_current = ((val >> 16) & 0x03FF) >> 1;
-                    printf("Rated Current: %u\n", rated_current);
+                    DEBUG_PRINTF("Rated Current: %u\n", rated_current);
                 } return;
             }
         } break;
@@ -138,16 +138,16 @@ void every1000ms()
 
     static bool eepromLoaded = false;
     if(!eepromLoaded && g_Ready) {
-        ("Loading EEPROM");
+        DEBUG_PRINTLN("Loading EEPROM");
         uint32_t magic = 0;
         EEPROM.get(EEPROM_MAGIC_ADDR, magic);
         if(magic == EEPROM_MAGIC_VALUE) {
             float savedVoltage;
             EEPROM.get(EEPROM_VOLTAGE_ADDR, savedVoltage);
             if(!isnan(savedVoltage)) {
-                ("Saved voltage: %.2f\n", savedVoltage);
+                DEBUG_PRINTF("Saved voltage: %.2f\n", savedVoltage);
                 if(savedVoltage >= 40.0f && savedVoltage <= 60.0f) {
-                    ("Setting voltage to %.2f\n", savedVoltage);
+                    DEBUG_PRINTF("Setting voltage to %.2f\n", savedVoltage);
                     setVoltage(savedVoltage, false);
                 }
             } else {
@@ -168,6 +168,19 @@ void every1000ms()
         } else {
             DEBUG_PRINTLN("No valid EEPROM settings found");
         }
+            // --- LOAD AC LIMIT ON BOOT ---
+            float savedAcLimit;
+            EEPROM.get(EEPROM_AC_LIMIT_ADDR, savedAcLimit);
+            if(!isnan(savedAcLimit)) {
+                DEBUG_PRINTF("Saved AC limit: %.2f\n", savedAcLimit);
+                if(savedAcLimit >= 0.0f && savedAcLimit <= 19.0f) {
+                    bool enable = (savedAcLimit > 0.0f);
+                    // Pass 'false' for perm so we don't unnecessarily re-write EEPROM on boot
+                    setInputCurrentLimit(savedAcLimit, enable, false); 
+                }
+            } else {
+                DEBUG_PRINTLN("Saved AC limit invalid (NaN)");
+            }
         eepromLoaded = true;
     }
 
@@ -287,17 +300,24 @@ void setCurrent(float i, bool perm)
     setCurrentHex(hex, perm);
 }
 
-void setInputCurrentLimit(float amps, bool enable)
+// Fixed function signature right here!
+void setInputCurrentLimit(float amps, bool enable, bool perm)
 {
     // The R4850G2 has a hardware maximum of ~17A-19A on the AC side.
     if(amps > 19.0) amps = 19.0;
     if(amps < 0.0) amps = 0.0;
 
-#ifdef ENABLE_DEBUG
+    // --- EEPROM SAVING LOGIC ---
+    if(perm) {
+        // If disabled, we save 0.0 so it stays disabled on next boot
+        float valueToSave = enable ? amps : 0.0f; 
+        EEPROM.put(EEPROM_AC_LIMIT_ADDR, valueToSave);
+        EEPROM.put(EEPROM_MAGIC_ADDR, (uint32_t)EEPROM_MAGIC_VALUE);
+        EEPROM.commit();
+        DEBUG_PRINTLN("Saved AC limit to EEPROM");
+    }
+
     DEBUG_PRINTF("Setting AC Input Limit: %.2fA, Enabled: %d\n", amps, enable);
-#else
-    Serial.printf("Setting AC Input Limit: %.2fA, Enabled: %d\n", amps, enable);
-#endif
 
     HuaweiEAddr eaddr;
     eaddr.protoId = HUAWEI_R48XX_PROTOCOL_ID;
