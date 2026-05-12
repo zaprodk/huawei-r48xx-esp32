@@ -1,3 +1,5 @@
+#define HEARTBEAT_LED 2
+
 #include <Arduino.h>
 #include <EEPROM.h>
 #include <CAN.h>
@@ -7,6 +9,7 @@
 #include "commands.h"
 #include "main.h"
 #include "secrets.h"
+
 
 // --- FEATURE FLAGS ---
 // Uncomment the next line to ENABLE Wi-Fi and OTA updates.
@@ -95,6 +98,10 @@ void init()
     // PSU enable pin
     pinMode(POWER_EN_GPIO, OUTPUT_OPEN_DRAIN);
     digitalWrite(POWER_EN_GPIO, 0); // Default = ON
+
+    // Heartbeat LED setup
+    pinMode(HEARTBEAT_LED, OUTPUT);
+    digitalWrite(HEARTBEAT_LED, HIGH); // Active low: HIGH = OFF
 
 #ifdef ENABLE_WIFI
     // --- WI-FI & OTA SETUP ---
@@ -225,6 +232,11 @@ void loop()
     {
         Huawei::every1000ms();
         g_Time1000 = millis();
+        // --- HEARTBEAT LED TOGGLE ---
+        static bool led_state = false;
+        led_state = !led_state; // Flip the state
+        // Active low: When led_state is true, output LOW (ON). Otherwise output HIGH (OFF).
+        digitalWrite(HEARTBEAT_LED, led_state ? LOW : HIGH);
     }
 }
 
