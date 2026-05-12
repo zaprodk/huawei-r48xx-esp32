@@ -104,38 +104,49 @@ int CMD_status(int argc, char **argv)
 {
     Huawei::HuaweiInfo &info = Huawei::g_PSU;
 
-    Main::channel()->println("--- STATUS ----");
-    Main::channel()->flush(); // Dynamically wait for buffer to empty
-
-    Main::channel()->printf("Input Voltage: %.2f V ~ %.2f Hz\n", info.input_voltage, info.input_freq);
-    Main::channel()->printf("Input Current: %.2f A\n", info.input_current);
-    Main::channel()->flush(); 
-    
-    // --- AC LIMIT READOUT ---
+    // 1. Format the AC Limit line first
+    char acLimitStr[64];
     if(Huawei::g_UserACLimitEnabled) {
-        Main::channel()->printf("AC Input Limit: %.2f A (ACTIVE)\n", Huawei::g_UserACLimit);
+        snprintf(acLimitStr, sizeof(acLimitStr), "AC Input Limit: %.2f A (ACTIVE)", Huawei::g_UserACLimit);
     } else {
-        Main::channel()->println("AC Input Limit: DISABLED");
+        snprintf(acLimitStr, sizeof(acLimitStr), "AC Input Limit: DISABLED");
     }
-    Main::channel()->flush(); 
-    // ------------------------
 
-    Main::channel()->printf("Input Power: %.2f W\n", info.input_power);
-    Main::channel()->printf("Input Temperature: %.2f °C\n", info.input_temp);
-    Main::channel()->flush(); 
+    // 2. Create a 512-byte buffer in RAM to hold the entire message
+    char buffer[512];
+    
+    // 3. Build the giant string
+    // (Note: using \r\n ensures perfect line breaks on all Bluetooth apps)
+    snprintf(buffer, sizeof(buffer),
+        "--- STATUS ----\r\n"
+        "Input Voltage: %.2f V ~ %.2f Hz\r\n"
+        "Input Current: %.2f A\r\n"
+        "%s\r\n"
+        "Input Power: %.2f W\r\n"
+        "Input Temperature: %.2f °C\r\n"
+        "PSU Efficiency: %.2f %%\r\n"
+        "Output Voltage: %.2f V\r\n"
+        "Output Current: %.2f A / %.2f A\r\n"
+        "Output Power: %.2f W\r\n"
+        "Output Temperature: %.2f °C\r\n"
+        "Coulomb Counter: %.2f Ah\r\n"
+        "--- STATUS ----\r\n",
+        info.input_voltage, info.input_freq,
+        info.input_current,
+        acLimitStr,
+        info.input_power,
+        info.input_temp,
+        info.efficiency * 100.0,
+        info.output_voltage,
+        info.output_current, info.output_current_max,
+        info.output_power,
+        info.output_temp,
+        Huawei::g_CoulombCounter / 3600.0
+    );
 
-    Main::channel()->printf("PSU Efficiency: %.2f %%\n", info.efficiency * 100.0);
-    Main::channel()->printf("Output Voltage: %.2f V\n", info.output_voltage);
+    // 4. Send the entire block at once and wait for it to clear
+    Main::channel()->print(buffer);
     Main::channel()->flush(); 
-
-    Main::channel()->printf("Output Current: %.2f A / %.2f A\n", info.output_current, info.output_current_max);
-    Main::channel()->printf("Output Power: %.2f W\n", info.output_power);
-    Main::channel()->flush(); 
-
-    Main::channel()->printf("Output Temperature: %.2f °C\n", info.output_temp);
-    Main::channel()->printf("Coulomb Counter: %.2f Ah\n", Huawei::g_CoulombCounter / 3600.0);
-    Main::channel()->println("--- STATUS ----");
-    Main::channel()->flush();
 
     return 0;
 }
