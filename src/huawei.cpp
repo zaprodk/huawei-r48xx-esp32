@@ -21,8 +21,11 @@
 
 namespace Huawei {
 
-// Calibration offset: The physical output is roughly 0.13V lower than the digital reading
-const float OUTPUT_VOLTAGE_OFFSET = -0.13f;
+// The DAC (setting) needs a 0.13V push to overcome physical hardware drop
+const float VOLTAGE_SET_OFFSET = -0.13f; 
+
+// The ADC (telemetry reading) only over-reports by about 0.08V internally
+const float VOLTAGE_READ_OFFSET = -0.08f;
 
 bool g_Ready = false;
 uint16_t g_UserVoltage = 0x00;
@@ -75,7 +78,7 @@ void onRecvCAN(uint32_t msgid, uint8_t *data, uint8_t length)
                     g_PSU.efficiency = val / 1024.0;
                 } return;
                 case 0x0175: {
-                    g_PSU.output_voltage = (val / 1024.0) + OUTPUT_VOLTAGE_OFFSET;
+                    g_PSU.output_voltage = (val / 1024.0) + VOLTAGE_READ_OFFSET;
                 } return;
                 case 0x0176: {
                     g_PSU.output_current_max = val / 20.0;
@@ -271,8 +274,8 @@ void setVoltage(float u, bool perm)
 
     // To get the actual physical output to match 'u', we must tell the 
     // internal DAC to aim slightly higher to overcome the hardware voltage drop.
-    // Subtracting a negative offset (e.g. 55.0 - (-0.13)) adds it to the target.
-    uint16_t hex = (u - OUTPUT_VOLTAGE_OFFSET) * 1024.0;
+    // Subtracting a negative offset adds it to the target
+    uint16_t hex = (u - VOLTAGE_SET_OFFSET) * 1024.0;
     
     DEBUG_PRINTF("Calculated hex: %d\n", hex);
     setVoltageHex(hex, perm);
