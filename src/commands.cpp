@@ -107,6 +107,15 @@ int CMD_status(int argc, char **argv)
     Main::channel()->println("--- STATUS ----");
     Main::channel()->printf("Input Voltage: %.2f V ~ %.2f Hz\n", info.input_voltage, info.input_freq);
     Main::channel()->printf("Input Current: %.2f A\n", info.input_current);
+    
+    // --- NEW AC LIMIT READOUT ---
+    if(Huawei::g_UserACLimitEnabled) {
+        Main::channel()->printf("AC Input Limit: %.2f A (ACTIVE)\n", Huawei::g_UserACLimit);
+    } else {
+        Main::channel()->println("AC Input Limit: DISABLED");
+    }
+    // ----------------------------
+
     Main::channel()->printf("Input Power: %.2f W\n", info.input_power);
     Main::channel()->printf("Input Temperature: %.2f °C\n", info.input_temp);
     Main::channel()->printf("PSU Efficiency: %.2f %%\n", info.efficiency * 100.0);

@@ -27,6 +27,8 @@ const float OUTPUT_VOLTAGE_CALIBRATION = 1.0f;  // 1.0 = no calibration, adjust 
 bool g_Ready = false;
 uint16_t g_UserVoltage = 0x00;
 uint16_t g_UserCurrent = 0x00;
+float g_UserACLimit = 0.0;           // <--- Added for AC tracking
+bool g_UserACLimitEnabled = false;   // <--- Added for AC tracking
 float g_Current = 0.0;
 float g_CoulombCounter = 0.0;
 HuaweiInfo g_PSU;
@@ -306,6 +308,10 @@ void setInputCurrentLimit(float amps, bool enable, bool perm)
     // The R4850G2 has a hardware maximum of ~17A-19A on the AC side.
     if(amps > 19.0) amps = 19.0;
     if(amps < 0.0) amps = 0.0;
+
+    // --- TRACK STATE FOR STATUS PRINT ---
+    g_UserACLimit = amps;
+    g_UserACLimitEnabled = enable;
 
     // --- EEPROM SAVING LOGIC ---
     if(perm) {
