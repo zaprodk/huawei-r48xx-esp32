@@ -20,7 +20,7 @@
 // #define ENABLE_DEBUG
 
 // #define HOSTNAME "Huawei-R4850G2"
-#define HOSTNAME "ESP32-R4850G2"
+#define PSU_HOSTNAME "ESP32-R4850G2"
 
 // --- DEBUG MACROS ---
 #ifdef ENABLE_DEBUG
@@ -108,7 +108,7 @@ void init()
 
 #ifdef ENABLE_WIFI
     // --- WI-FI & OTA SETUP ---
-    WiFi.setHostname("HOSTNAME");
+    WiFi.setHostname(PSU_HOSTNAME);
     if(!WiFi.begin(g_WIFI_SSID, g_WIFI_Passphrase))
         DEBUG_PRINTLN("WiFi config error!");
     else {
@@ -144,7 +144,7 @@ void init()
 
     // --- CLEAN BLUETOOTH START ---
     SerialBT.register_callback(bt_connection_callback);
-    SerialBT.begin("HOSTNAME"); 
+    SerialBT.begin(PSU_HOSTNAME); 
 
     if(!CAN.begin(125E3)) {
         DEBUG_PRINTLN("Starting CAN failed!");

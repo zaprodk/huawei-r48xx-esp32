@@ -21,9 +21,15 @@
 
 namespace Huawei {
 
+    // Huawei-R4850G2
 // The DAC (setting) needs a 0.13V push to overcome physical hardware drop
-const float VOLTAGE_SET_OFFSET = -0.13f; 
+//const float VOLTAGE_SET_OFFSET = -0.13f; 
+// The ADC (telemetry reading) only over-reports by about 0.08V internally
+// const float VOLTAGE_READ_OFFSET = -0.08f;
 
+// ESP32-R4850G2
+// The DAC (setting) needs a 0.03V adjustment
+const float VOLTAGE_SET_OFFSET = 0.04f; 
 // The ADC (telemetry reading) only over-reports by about 0.08V internally
 const float VOLTAGE_READ_OFFSET = -0.08f;
 
